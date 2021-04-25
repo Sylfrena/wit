@@ -5,7 +5,6 @@ open Sys
 open Printf
 open Str
 
-
 (* add error handling, what if file already exists?*)
 (*let init pwd =
         let root_path = pwd;
@@ -32,23 +31,51 @@ let init inp =
         print_endline inp
 
 let list_files path =
-        Sys.readdir path
+        Array.to_list (Sys.readdir path)
 
-(*Return only no -hidden files and folders, i.e first character of name is not '.' *)
-let remove_hidden name =
-        match Str.first_chars name 1  with
-        |"." -> ()
-        |_ -> print_endline name
+(*Checks if file/folder is hidden*)
+let is_hidden name =
+        match Str.first_chars name 1 with
+        | "." -> true
+        | _ -> false
+
+let rec files_to_commit l =
+        match l with
+        | [] -> []
+        | hd :: tl ->
+                match is_hidden hd with
+                | false -> hd :: files_to_commit tl
+                | _ ->  files_to_commit tl
+
+let buf = Bytes.create 20000
+let pass_blob file path =
+        print_endline file;
+        let fd = Unix.openfile file [Unix.O_RDONLY] 0o775 in
+        let _data = Unix.read fd buf 0 20000 in
+        print_endline "okay before here";
+
+        let blo = Git_database.store_object (Bytes.to_string buf) in
+        Git_database.write_object path blo
 
 
-
-let commit com =
+(*com here actually is useless I just don't know yet what to do with argless inputs*)
+let commit _com =
         let root_path = Sys.getcwd() in
         let git_path = root_path ^ "/.git" in
-        let _db_path = git_path ^ "/objects" in
-        print_endline com;
-        let l = list_files root_path in
-        Array.iter remove_hidden l
+        let db_path = git_path ^ "/objects" in
+        let all_files = list_files root_path in
+        let req_files = files_to_commit all_files in
+        let rec fn l =
+                match l with
+                | [] -> ()
+                | hd :: tl -> pass_blob hd db_path; fn tl in
+        fn req_files
+
+
+
+        (*let fl = Array.map remove_hidden l in
+         Array.iter pass_blob (Array.map parse_ohwhy fl) db_path*)
+
 
 
 (* helper to catch error becuase can't think of a better way rn
